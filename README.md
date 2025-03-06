@@ -4,25 +4,8 @@
 
 ## 🎮 Slither, Eat, Grow Fat, EXPLODE!
 
-```
-> be me
-> fat snake
-> slithering around in some weird grid world
-> mfw apples keep spawning everywhere
-> can't stop eating, getting fatter by the minute
-> other snakes jealous of my gains
-> hit 100 segments, still hungry
-> game developer never implemented size limit
-> one day special golden apple appears
-> consume without hesitation
-> immediate regret
-> feel body expanding beyond grid boundaries
-> explosion.exe
-> bits of snake everywhere
-> respawn as tiny snake
-> see apple
-> here we go again
-```
+![CleanShot 2025-03-06 at 16 31 34@2x](https://github.com/user-attachments/assets/f563cec1-9856-4a1d-82ab-b9faf67cf77a)
+
 
 ## ✨ Epic Features
 
