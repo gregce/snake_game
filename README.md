@@ -4,6 +4,7 @@
 
 ## 🎮 Slither, Eat, Grow Fat, EXPLODE!
 
+```
 > be me
 > fat snake
 > slithering around in some weird grid world
@@ -21,6 +22,7 @@
 > respawn as tiny snake
 > see apple
 > here we go again
+```
 
 ## ✨ Epic Features
 
