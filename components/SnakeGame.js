@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Box, Sphere, Sky, Text, Environment, FirstPersonControls, Stars, Html } from '@react-three/drei'
-import * as THREE from 'three'
+import THREE from './ThreePatches' // Use our patched version instead of the direct import
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls'
 
 // World constants
