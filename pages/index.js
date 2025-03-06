@@ -37,7 +37,7 @@ export default function Home() {
             color: '#fff',
             fontWeight: 'normal'
           }}>
-            Voxel Viper
+            Voluminous Voxel Viper
           </h2>
         </div>
         
