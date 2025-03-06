@@ -781,7 +781,7 @@ function LayerIndicator({ currentDepth, fps }) {
 }
 
 // World generation manager
-function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCollect, onGameStateUpdate, score, setScore }) {
+function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCollect, onGameStateUpdate, score, setScore, gameOver, onGameOver }) {
   const [terrain, setTerrain] = useState({})
   const [collectibles, setCollectibles] = useState([])
   const [snake, setSnake] = useState([])
@@ -1174,6 +1174,9 @@ function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCo
   
   // Handle snake movement - optimized for isometric gameplay
   const moveSnake = (dx, dy, dz) => {
+    // Prevent movement if game is over
+    if (gameOver || isExploding) return;
+    
     setSnake(prevSnake => {
       if (prevSnake.length === 0) return prevSnake
       
@@ -1684,8 +1687,11 @@ function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCo
         if (newFatness >= MAX_SNAKE_FATNESS && !isExploding) {
           console.log(`Snake has reached maximum fatness (${newFatness.toFixed(2)})! EXPLODING!!!`);
           
-          // Trigger the explosion
-          explodeSnake();
+          // Store the final score for later retrieval
+          // No need to call onGameOver here, we'll handle it in explodeSnake
+          
+          // Trigger the explosion with the current score
+          explodeSnake(newScore);
         }
         
         return Math.min(newFatness, MAX_SNAKE_FATNESS);
@@ -1712,7 +1718,9 @@ function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCo
   };
   
   // Add explodeSnake function
-  const explodeSnake = () => {
+  const explodeSnake = (finalScore = null) => {
+    // If a specific final score was provided, use it
+    const scoreToReport = finalScore !== null ? finalScore : score;
     setIsExploding(true);
     
     // Create blood particles at snake segments
@@ -1827,14 +1835,14 @@ function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCo
     setExplosionLight(true);
     setExplosionIntensity(5.0);
     
-    // Reset snake after a delay
-    setTimeout(() => {
-      resetWorld();
-      setIsExploding(false);
-      setBloodParticles([]);
-      setSnakeFatness(INITIAL_SNAKE_FATNESS);
-      setExplosionLight(false);
-    }, 5000);
+    // Trigger game over with the provided or current score
+    if (onGameOver) {
+      setTimeout(() => {
+        onGameOver(scoreToReport);
+      }, 2000); // Wait 2 seconds before showing game over screen
+    }
+    
+    // Don't reset world immediately - keep the explosion visible
   };
   
   // Optimized game loop with fixed isometric camera 
@@ -2802,10 +2810,10 @@ function SnakeSelector({ onSelect }) {
           fontSize: '22px',
           color: '#f0f0f0'
         }}>
-          Select Your Viper
+          Select Your Chunky Viper
         </h2>
         <div style={{ fontSize: '14px', color: '#aaa', maxWidth: '500px', margin: '0 auto' }}>
-          Choose wisely - each viper has unique abilities that affect gameplay
+          Choose wisely - eat everything in sight and grow fatter until you explode!
         </div>
       </div>
       
@@ -2854,12 +2862,12 @@ function SnakeSelector({ onSelect }) {
                 <span>{renderStatBars(snake.speed / 0.16 * 5)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <span>Dig Power:</span>
+                <span style={{ color: '#ff9800', fontWeight: 'bold' }}>Fat Potential:</span>
                 <span>{renderStatBars(snake.digPower / 2.0 * 5)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Strength:</span>
-                <span>{renderStatBars(snake.strength / 1.5 * 5)}</span>
+                <span>Metabolism:</span>
+                <span>{renderStatBars((1.5 - snake.strength / 1.5) * 5)}</span>
               </div>
             </div>
           </div>
@@ -2867,7 +2875,7 @@ function SnakeSelector({ onSelect }) {
       </div>
       
       <div style={{ marginTop: '20px', fontSize: '14px', textAlign: 'center' }}>
-        <p>Choose your snake carefully. Each snake has unique abilities that affect gameplay.</p>
+        <p>Choose your snake carefully. Some get fatter faster, but all will explode if they eat too much!</p>
       </div>
     </div>
   )
@@ -2973,6 +2981,11 @@ function TreasureNotification({ item, visible, onClose }) {
         <div style={{color: '#aaa'}}>Rarity: <span style={{color: 'white'}}>{item.rarity}</span></div>
         <div style={{color: '#aaa'}}>Value: <span style={{color: '#4eff4e'}}>+{item.value * 10}</span></div>
       </div>
+      {item.type === 'food' && (
+        <div style={{color: '#ff9800', fontSize: '10px', marginTop: '2px'}}>
+          Makes you fatter! <span style={{color: '#ff5555'}}>+{item.growthAmount || 1}</span> chunkiness
+        </div>
+      )}
     </div>
   )
 }
@@ -3437,16 +3450,92 @@ function HUD({ score, inventory, depth, layer, viewMode, snakePosition, terrain,
             }}
           >
             {gameInfo.snakeFatness > gameInfo.maxFatness * 0.85 ? 
-              "IMMINENT EXPLOSION!!!" : 
+              "TOO FAT! IMMINENT EXPLOSION!!!" : 
               gameInfo.snakeFatness > gameInfo.maxFatness * 0.75 ? 
-              "CRITICAL FATNESS LEVEL!" : 
-              "WARNING: SNAKE IS GETTING BIGGER!"
+              "CRITICAL FATNESS LEVEL! DIET RECOMMENDED!" : 
+              "WARNING: YOUR SNAKE IS GETTING TOO CHUNKY!"
             }
           </div>
         </>
       )}
     </>
   )
+}
+
+// Game Over Screen component
+function GameOverScreen({ score, onRestart }) {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: '80%',
+      maxWidth: '600px',
+      backgroundColor: 'rgba(0, 0, 0, 0.9)',
+      padding: '30px',
+      borderRadius: '15px',
+      color: 'white',
+      textAlign: 'center',
+      boxShadow: '0 0 50px rgba(255, 0, 0, 0.5), 0 0 20px rgba(255, 100, 100, 0.8)',
+      border: '2px solid #ff3333',
+      zIndex: 1000,
+      fontFamily: 'monospace'
+    }}>
+      <h1 style={{
+        fontSize: '36px',
+        margin: '0 0 20px',
+        color: '#ff3333',
+        textShadow: '0 0 10px rgba(255, 0, 0, 0.7)'
+      }}>
+        GAME OVER
+      </h1>
+      
+      <div style={{
+        fontSize: '24px',
+        margin: '20px 0',
+      }}>
+        Your snake was too <span style={{ color: '#ff5555', fontWeight: 'bold' }}>FAT</span> and <span style={{ color: '#ff5555' }}>EXPLODED</span>!
+      </div>
+      <div style={{
+        fontSize: '16px',
+        margin: '10px 0',
+        color: '#aaaaaa'
+      }}>
+        That's what happens when you eat everything in sight!
+      </div>
+      
+      {/* Final score display removed */}
+      
+      <button 
+        onClick={onRestart}
+        style={{
+          padding: '15px 30px',
+          fontSize: '20px',
+          backgroundColor: '#4CAF50',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+          transition: 'all 0.2s ease',
+          fontFamily: 'monospace',
+          fontWeight: 'bold',
+          marginTop: '20px'
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.backgroundColor = '#45a049';
+          e.currentTarget.style.transform = 'scale(1.05)';
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.backgroundColor = '#4CAF50';
+          e.currentTarget.style.transform = 'scale(1)';
+        }}
+      >
+        PLAY AGAIN
+      </button>
+    </div>
+  );
 }
 
 // Instructions component with minimize feature
@@ -3537,9 +3626,10 @@ function Instructions() {
       <div style={{ display: 'flex', marginBottom: '10px' }}>
         <div style={{ width: '90px', fontWeight: 'bold', color: '#FF5722' }}>Objective:</div>
         <div>
-          <div>Eat food to grow longer</div>
+          <div>Eat food to grow <span style={{ color: '#ff9800', fontWeight: 'bold' }}>FATTER</span></div>
           <div>Collect powerups</div>
           <div>Find treasures for points</div>
+          <div style={{ color: '#ff5555', marginTop: '3px' }}>But don't get too fat or you'll explode!</div>
         </div>
       </div>
       
@@ -3615,6 +3705,8 @@ export default function SnakeGame() {
   const [currentLayer, setCurrentLayer] = useState(LAYERS[0])
   // Add notification queue
   const notificationQueue = useRef([]).current;
+  const [gameOver, setGameOver] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
 
   // Update current layer based on depth
   useEffect(() => {
@@ -3808,6 +3900,18 @@ export default function SnakeGame() {
     setFps(newFps);
   }
   
+  const handleGameOver = (finalGameScore) => {
+    setGameOver(true);
+    // Use the current score directly for maximum accuracy
+    setFinalScore(score);
+    console.log("Game Over! Final score:", score);
+  }
+  
+  const handleRestart = () => {
+    // Reload the entire application to start fresh
+    window.location.reload();
+  }
+  
   return (
     <>
       <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -3823,6 +3927,8 @@ export default function SnakeGame() {
                   onGameStateUpdate={handleGameStateUpdate}
                   score={score} // Pass current score to WorldManager
                   setScore={setScore} // Pass setScore to WorldManager
+                  gameOver={gameOver} // Pass gameOver flag
+                  onGameOver={handleGameOver} // Pass game over handler
                 />
                 
                 {/* FPS Counter inside the Canvas where useFrame works */}
@@ -3906,6 +4012,13 @@ export default function SnakeGame() {
       
       {!gameStarted && (
         <SnakeSelector onSelect={handleSnakeSelect} />
+      )}
+      
+      {gameOver && (
+        <GameOverScreen 
+          score={finalScore} 
+          onRestart={handleRestart}
+        />
       )}
     </>
   )
