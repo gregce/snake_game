@@ -554,34 +554,35 @@ function SnakeSegment({ position, rotation, isHead, type, scale = 1, isDigging =
         scale={pulseScale}
       />
       
-      {/* Enhanced connection between segments - larger, more visible joint */}
+      {/* Connection between segments - small joint sphere */}
       {!isHead && segmentIndex > 0 && segmentIndex < totalSegments && (
-        <>
-          {/* Main connection sphere */}
-          <mesh position={[0, 0, -VOXEL_SIZE * 0.5 * scale * offsetFactor]}>
-            <sphereGeometry args={[VOXEL_SIZE * 0.3 * scale, 8, 8]} />
-            <meshStandardMaterial 
-              color={type.color} 
-              emissive={type.glowColor || type.color}
-              emissiveIntensity={0.4}
-            />
-          </mesh>
-          
-          {/* Connection cylinder to ensure visual continuity */}
-          <mesh position={[0, 0, -VOXEL_SIZE * 0.25 * scale * offsetFactor]} rotation={[Math.PI/2, 0, 0]}>
-            <cylinderGeometry args={[
-              VOXEL_SIZE * 0.25 * scale, 
-              VOXEL_SIZE * 0.25 * scale, 
-              VOXEL_SIZE * 0.5 * scale, 
-              8
-            ]} />
-            <meshStandardMaterial 
-              color={type.color}
-              emissive={type.glowColor || type.color}
-              emissiveIntensity={0.3}
-            />
-          </mesh>
-        </>
+        <mesh position={[0, 0, -VOXEL_SIZE * 0.45 * scale * offsetFactor]}>
+          <sphereGeometry args={[VOXEL_SIZE * 0.25 * scale, 12, 12]} />
+          <meshStandardMaterial 
+            color={type.color} 
+            emissive={type.glowColor || type.color}
+            emissiveIntensity={0.4}
+          />
+        </mesh>
+      )}
+      
+      {/* Add a visible connection "tube" between segments for better continuity */}
+      {!isHead && segmentIndex > 0 && (
+        <mesh position={[0, 0, -VOXEL_SIZE * 0.25 * scale * offsetFactor]} rotation={[Math.PI/2, 0, 0]}>
+          <cylinderGeometry 
+            args={[
+              VOXEL_SIZE * 0.22 * scale, // top radius
+              VOXEL_SIZE * 0.26 * scale, // bottom radius (wider to connect to next segment)
+              VOXEL_SIZE * 0.35 * scale, // height
+              8 // radial segments
+            ]} 
+          />
+          <meshStandardMaterial 
+            color={type.color}
+            emissive={type.glowColor || type.color}
+            emissiveIntensity={0.3}
+          />
+        </mesh>
       )}
       
       {/* Head details */}
@@ -858,40 +859,33 @@ function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCo
     const startZ = 0;
     const startY = SNAKE_ELEVATION;
     
-    // Set initial direction - snake facing forward down the Z axis
+    // Set initial direction - snake facing forward
     const initialDirection = [0, 0, 1];
     setDirection(initialDirection);
     
-    // Create head with proper rotation to match direction
+    // Create head
     initialSnake.push({
       position: [startX, startY, startZ],
-      rotation: [0, Math.atan2(initialDirection[0], initialDirection[2]), 0] // Properly face direction
+      rotation: [0, 0, 0]
     });
     
     // Create initial body segments
-    // Use proper spacing that matches what the moveSnake function will use
-    const segmentSpacing = VOXEL_SIZE * SNAKE_SEGMENT_SPACING; 
-    
-    // Create a complete snake body from the start - all segments in a nice line
+    // Ensure the snake has a body from the beginning
+    const segmentSpacing = SNAKE_SEGMENT_SPACING * VOXEL_SIZE; // Use both constants for proper spacing
     for (let i = 1; i < INITIAL_SNAKE_LENGTH; i++) {
-      // Each segment is positioned directly behind the previous one
-      // Using negative of the direction vector to place behind the head
+      // Position segments in a line behind the head using the initial direction
       initialSnake.push({
+        // Use negative direction to place segments behind the head
         position: [
           startX - (initialDirection[0] * i * segmentSpacing),
-          startY, // All segments at same height
+          startY,
           startZ - (initialDirection[2] * i * segmentSpacing)
         ],
-        // All segments have same rotation as head to create a cohesive appearance
-        rotation: [0, Math.atan2(initialDirection[0], initialDirection[2]), 0]
+        rotation: [0, 0, 0]
       });
     }
     
-    // Set the snake state with the complete body
     setSnake(initialSnake);
-    
-    // Reset snake length state to match number of segments
-    setSnakeLength(INITIAL_SNAKE_LENGTH);
     
     // Generate initial terrain chunks around snake
     const initialTerrain = {};
@@ -1558,119 +1552,122 @@ function WorldManager({ selectedSnakeType, inventory, setInventory, onTreasureCo
         })
       }
       
-      // ===== BEGIN MAJOR REWRITE OF SNAKE BODY FOLLOWING LOGIC =====
-      // Create a new snake with the head at the beginning
-      const newSnake = [newHead];
+      // Create a new snake with dynamic length that can grow
+      const newSnake = [newHead]
       
-      // FIXED BODY FOLLOWING ALGORITHM:
-      // For each segment after the head, determine its new position based on the previous segment
-      // This ensures segments stay connected in a continuous chain
-      if (prevSnake.length > 1) {
-        // Positions to follow - start with the head position
-        const positionsToFollow = [newHead.position];
+      // Create body segments using a direct follow algorithm that maintains consistent spacing
+      if (prevSnake.length > 1 || dirMagnitude > 0) {
+        // We have previous segments or we're moving in a direction
+        // Use a chain-link approach where each segment directly follows the one in front
         
-        // Interpolation factor - controls how closely segments follow
-        // Make the first few segments follow more tightly
-        const baseFollowFactor = 0.45; // Increased from 0.3 to 0.45 for tighter following
+        const targetLength = Math.min(snakeLength, prevSnake.length > 1 ? prevSnake.length : snakeLength);
         
-        // For each segment beyond the head, calculate new position
-        for (let i = 1; i < snakeLength && i < prevSnake.length + 1; i++) {
-          const prevSegment = prevSnake[i] || prevSnake[prevSnake.length - 1];
-          const segmentToFollow = positionsToFollow[i - 1];
+        for (let i = 1; i < targetLength; i++) {
+          // Get the segment in front (the one this segment should follow)
+          const segmentInFront = newSnake[i-1];
           
-          // Calculate follow factor - stronger for segments closer to head
-          // Adjusted for much tighter following to keep segments visually connected
-          const followFactor = Math.min(0.8, baseFollowFactor + (0.4 / Math.max(1, i))); 
+          // Calculate the position for this segment
+          let newPos;
+          let newRot;
           
-          // Interpolate between current position and target position
-          const newPos = [
-            prevSegment.position[0] * (1 - followFactor) + segmentToFollow[0] * followFactor,
-            SNAKE_ELEVATION, // Keep all segments at consistent elevation
-            prevSegment.position[2] * (1 - followFactor) + segmentToFollow[2] * followFactor
-          ];
-          
-          // Calculate segment rotation to face the movement direction
-          // This makes the snake's body segments naturally follow the head's direction
-          let segmentRotation;
-          
-          if (i === 1) {
-            // First body segment follows head's rotation closely
-            segmentRotation = [0, newHead.rotation[1], 0];
-          } else {
-            // Other segments calculate rotation based on their movement
-            const prevPos = prevSegment.position;
-            segmentRotation = [
+          if (i < prevSnake.length) {
+            // This segment already exists, just update its position to follow
+            const prevSegment = prevSnake[i];
+            
+            // Calculate direction from front segment to its previous position
+            const dirFromFront = [
+              segmentInFront.position[0] - prevSnake[i-1].position[0],
               0,
-              Math.atan2(newPos[0] - prevPos[0], newPos[2] - prevPos[2]),
-              0
+              segmentInFront.position[2] - prevSnake[i-1].position[2]
             ];
-          }
-          
-          // Add this segment to the snake
-          newSnake.push({
-            position: newPos,
-            rotation: segmentRotation
-          });
-          
-          // Add this position to the follow list for the next segment
-          positionsToFollow.push(newPos);
-        }
-      } 
-      
-      // If we need to create new segments (either first move or growing)
-      if (newSnake.length < snakeLength) {
-        // Get last segment as reference point
-        const lastSegment = newSnake[newSnake.length - 1];
-        const secondLastSegment = newSnake.length > 1 ? 
-          newSnake[newSnake.length - 2] : 
-          { position: [lastSegment.position[0] - dx, lastSegment.position[1], lastSegment.position[2] - dz] };
-        
-        // Direction vector from second-to-last to last segment
-        let directionVector = [
-          lastSegment.position[0] - secondLastSegment.position[0],
-          0,
-          lastSegment.position[2] - secondLastSegment.position[2]
-        ];
-        
-        // If direction is zero (segments in same position), use movement direction
-        const dirLength = Math.sqrt(directionVector[0]**2 + directionVector[2]**2);
-        if (dirLength < 0.001) {
-          // If we don't have a good direction from segments, use the current movement or global direction
-          if (dirMagnitude > 0) {
-            directionVector = [-dx, 0, -dz]; // Opposite of movement direction
-          } else if (direction && direction.length === 3) {
-            directionVector = [-direction[0], 0, -direction[2]]; // Opposite of stored direction
+            
+            const dirLength = Math.sqrt(dirFromFront[0]**2 + dirFromFront[2]**2) || 0.001;
+            
+            // Normalize direction
+            const normalizedDir = [
+              dirFromFront[0] / dirLength,
+              0,
+              dirFromFront[2] / dirLength
+            ];
+            
+            // Fixed segment spacing - use smaller spacing for a tight snake
+            const spacing = SNAKE_SEGMENT_SPACING * 0.8;
+            
+            // Position this segment behind the segment in front along the movement direction
+            newPos = [
+              segmentInFront.position[0] - normalizedDir[0] * spacing,
+              SNAKE_ELEVATION,
+              segmentInFront.position[2] - normalizedDir[2] * spacing
+            ];
+            
+            // Calculate rotation from movement direction
+            newRot = [0, Math.atan2(normalizedDir[0], normalizedDir[2]), 0];
           } else {
-            directionVector = [0, 0, -1]; // Default direction backwards
+            // This is a new segment being added to the end
+            // Use direction from the last two segments to determine direction
+            const lastSegment = newSnake[newSnake.length-1];
+            const secondLastSegment = newSnake[newSnake.length-2] || lastSegment;
+            
+            // Direction from second-last to last segment
+            const tailDir = [
+              secondLastSegment.position[0] - lastSegment.position[0],
+              0,
+              secondLastSegment.position[2] - lastSegment.position[2]
+            ];
+            
+            const tailLength = Math.sqrt(tailDir[0]**2 + tailDir[2]**2) || 0.001;
+            
+            // Normalize direction
+            const normalizedTailDir = [
+              tailDir[0] / tailLength,
+              0,
+              tailDir[2] / tailLength
+            ];
+            
+            // Position new segment continuing the tail direction
+            newPos = [
+              lastSegment.position[0] - normalizedTailDir[0] * SNAKE_SEGMENT_SPACING * 0.8,
+              SNAKE_ELEVATION,
+              lastSegment.position[2] - normalizedTailDir[2] * SNAKE_SEGMENT_SPACING * 0.8
+            ];
+            
+            // Match rotation of last segment
+            newRot = [...lastSegment.rotation];
           }
-        } else {
-          // Normalize existing direction
-          directionVector = [
-            directionVector[0] / dirLength,
-            0,
-            directionVector[2] / dirLength
-          ];
+          
+          // Add the segment to the snake
+          newSnake.push({
+            position: newPos,
+            rotation: newRot
+          });
         }
+      } else {
+        // This is the very first move, create initial body segments
+        const effectiveDirection = dirMagnitude > 0 ? 
+          [dx, 0, dz] : // Use the current movement direction if moving
+          direction.length ? direction : [0, 0, -1]; // Use stored direction or default backward
         
-        // Add remaining segments in a line behind the last one
-        const segmentSpacing = VOXEL_SIZE * SNAKE_SEGMENT_SPACING;
-        
-        for (let i = newSnake.length; i < snakeLength; i++) {
-          const newPos = [
-            lastSegment.position[0] - directionVector[0] * segmentSpacing * (i - newSnake.length + 1),
+        // Create body segments in a line behind the head
+        for (let i = 1; i < snakeLength; i++) {
+          const headPos = newHead.position;
+          const headRot = newHead.rotation;
+          // Use a smaller spacing multiplier for tighter following
+          const spacing = SNAKE_SEGMENT_SPACING * 0.8;
+          
+          const segmentPos = [
+            headPos[0] - (effectiveDirection[0] * i * spacing),
             SNAKE_ELEVATION,
-            lastSegment.position[2] - directionVector[2] * segmentSpacing * (i - newSnake.length + 1)
+            headPos[2] - (effectiveDirection[2] * i * spacing)
           ];
           
           newSnake.push({
-            position: newPos,
-            rotation: lastSegment.rotation
+            position: segmentPos,
+            rotation: [...headRot]
           });
         }
       }
       
       return newSnake;
-      // ===== END MAJOR REWRITE =====
     })
   }
   
@@ -3210,14 +3207,14 @@ function HUD({ score, inventory, depth, layer, viewMode, snakePosition, terrain,
           </div>
         </div>
         
-        {/* Snake length display */}
+        {/* Snake fatness display */}
         <div style={{ 
           marginBottom: '12px', 
           display: 'flex',
           alignItems: 'center',
           gap: '8px'
         }}>
-          <div style={{ fontWeight: 'bold', color: '#aaffaa' }}>Length:</div>
+          <div style={{ fontWeight: 'bold', color: '#aaffaa' }}>Fatness:</div>
           <div style={{ flex: 1 }}>
             <div style={{
               width: '100%',
@@ -3227,15 +3224,17 @@ function HUD({ score, inventory, depth, layer, viewMode, snakePosition, terrain,
               overflow: 'hidden'
             }}>
               <div style={{
-                width: `${Math.min(100, (snakeLength / MAX_SNAKE_LENGTH) * 100)}%`,
+                width: `${Math.min(100, ((gameInfo?.snakeFatness || 0) / (gameInfo?.maxFatness || 1)) * 100)}%`,
                 height: '100%',
-                backgroundColor: '#4CAF50',
+                backgroundColor: (gameInfo?.snakeFatness || 0) > (gameInfo?.maxFatness || 5) * 0.8 ? '#f44336' : 
+                               (gameInfo?.snakeFatness || 0) > (gameInfo?.maxFatness || 5) * 0.6 ? '#ff9800' : 
+                               '#4CAF50',
                 borderRadius: '6px',
-                transition: 'width 0.3s ease'
+                transition: 'width 0.3s ease, background-color 0.3s ease'
               }}></div>
             </div>
             <div style={{ fontSize: '12px', textAlign: 'right', marginTop: '2px' }}>
-              {snakeLength}/{MAX_SNAKE_LENGTH}
+              {(gameInfo?.snakeFatness || 0).toFixed(1)}/{gameInfo?.maxFatness || 0}
             </div>
           </div>
         </div>
@@ -3397,24 +3396,7 @@ function HUD({ score, inventory, depth, layer, viewMode, snakePosition, terrain,
         viewMode={viewMode} 
       />
       
-      {/* View mode indicator */}
-      <div style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        color: 'white',
-        fontSize: '24px',
-        fontWeight: 'bold',
-        textShadow: '0 0 10px rgba(0, 0, 0, 0.8)',
-        opacity: viewMode === 'isometric' ? 0.7 : 0,
-        transition: 'opacity 0.5s',
-        pointerEvents: 'none',
-        textAlign: 'center'
-      }}>
-        ISOMETRIC VIEW<br/>
-        <span style={{ fontSize: '16px' }}>You can see yourself and surroundings</span>
-      </div>
+      {/* View mode indicator removed */}
       
       {gameInfo.snakeFatness > gameInfo.maxFatness * 0.6 && (
         <>
