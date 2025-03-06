@@ -4,9 +4,23 @@
 
 ## 🎮 Slither, Eat, Grow Fat, EXPLODE!
 
-Dive into the vibrant world of **Voluminous Voxel Viper** - a unique 3D snake game that turns the classic concept on its head! Navigate through colorful terrains, eat everything in sight, collect treasures, and watch your snake grow fatter... until it can't take anymore and EXPLODES in spectacular fashion! 
-
-This isn't your grandfather's Snake game. This is Snake with an attitude, a big appetite, and a serious weight problem!
+> be me
+> fat snake
+> slithering around in some weird grid world
+> mfw apples keep spawning everywhere
+> can't stop eating, getting fatter by the minute
+> other snakes jealous of my gains
+> hit 100 segments, still hungry
+> game developer never implemented size limit
+> one day special golden apple appears
+> consume without hesitation
+> immediate regret
+> feel body expanding beyond grid boundaries
+> explosion.exe
+> bits of snake everywhere
+> respawn as tiny snake
+> see apple
+> here we go again
 
 ## ✨ Epic Features
 
